@@ -1,24 +1,28 @@
-# IE212.Q21.VB2
+start kafka
 
-Bước 1:
-Chạy file tạo dữ liệu ảo
-python data_generator_socket.py
+docker-compose -f docker/docker-compose.yml up -d
 
-Bước 2:
-Chạy file xử lý luồng chính
-spark-submit spark_streaming.py
 
-Cài Kafka:
-docker run -d --name kafka \
-  -p 9092:9092 \
-  apache/kafka:latest
+tạo topic
 
-Tạo topic:
-docker exec -it kafka /opt/kafka/bin/kafka-topics.sh \
-  --create \
-  --topic sensor-data \
-  --bootstrap-server localhost:9092 \
-  --partitions 1 \
-  --replication-factor 1
+docker exec -it kafka kafka-topics.sh --create
+--topic sensor-raw --bootstrap-server localhost:9092
 
-  
+
+docker exec -it kafka kafka-topics.sh --create
+--topic sensor-processed --bootstrap-server localhost:9092
+
+
+chạy producer
+
+python producer/producer.py
+
+
+Chạy spark
+
+spark-submit spark/app.py
+
+
+Chạy consumer
+
+python consumer/consumer.py
