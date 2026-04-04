@@ -1,2 +1,5 @@
 pyspark
 kafka-python
+
+aiohttp
+websockets
