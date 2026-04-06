@@ -8,7 +8,7 @@ import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 file_path = os.path.join(BASE_DIR, 'data', 'data.csv')
 
-BOOTSTRAP_SERVERS = 'kafka:9092'
+BOOTSTRAP_SERVERS = "kafka:9092"
 TOPIC_NAME = 'my_dataset_topic'
 
 producer = KafkaProducer(

@@ -28,7 +28,7 @@ services:
       sh -c "pip install -r requirements.txt && python producer.py"
 
   spark:
-    image: bitnami/spark:3.5
+    image: spark:python3
     container_name: spark_consumer
     depends_on:
       - kafka
