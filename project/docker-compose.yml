@@ -22,21 +22,24 @@ services:
       retries: 12
 
   producer:
-    image: python:3.10
-    container_name: kafka_producer
-    depends_on:
-      kafka:
-        condition: service_healthy
-    volumes:
-      - ./producer.py:/app/producer.py
-      - ./data:/app/data
-      - ./requirements.txt:/app/requirements.txt
-    working_dir: /app
-    command: >
-      sh -c "
-      pip install -r requirements.txt &&
-      python producer.py
-      "
+      image: apache/spark:3.5.0  # Đổi từ python:3.10 sang spark
+      container_name: kafka_producer
+      user: root # Cần quyền root để cài pip requirements
+      depends_on:
+        kafka:
+          condition: service_healthy
+      volumes:
+        - ./producer.py:/app/producer.py
+        - ./data:/app/data
+        - ./requirements.txt:/app/requirements.txt
+      working_dir: /app
+      command: >
+        sh -c "
+        pip install -r requirements.txt &&
+        /opt/spark/bin/spark-submit 
+        --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 
+        /app/producer.py
+        "
 
   spark:
     image: apache/spark:3.5.0
