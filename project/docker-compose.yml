@@ -28,10 +28,15 @@ services:
       kafka:
         condition: service_healthy
     volumes:
-      - .:/app
+      - ./producer.py:/app/producer.py
+      - ./data:/app/data
+      - ./requirements.txt:/app/requirements.txt
     working_dir: /app
     command: >
-      sh -c "pip install -r requirements.txt && python producer.py"
+      sh -c "
+      pip install -r requirements.txt &&
+      python producer.py
+      "
 
   spark:
     image: apache/spark:3.5.0
@@ -41,11 +46,13 @@ services:
       kafka:
         condition: service_healthy
     volumes:
-      - .:/app
+      - ./consumer.py:/app/consumer.py
+      - ./requirements.txt:/app/requirements.txt
       - spark_ivy:/home/spark/.ivy2
     working_dir: /app
     command: >
       sh -c "
+      pip install -r requirements.txt &&
       mkdir -p /home/spark/.ivy2/cache &&
       chmod -R 777 /home/spark/.ivy2 &&
       /opt/spark/bin/spark-submit

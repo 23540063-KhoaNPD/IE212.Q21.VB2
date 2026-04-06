@@ -1,22 +1,3 @@
-build
+chạy rebuild.cmd ở lần đầu tiên, hoặc mỗi lần muốn clean toàn bộ docker
 
-docker-compose up -d
-
-
-Rebuild:
-
-docker compose down -v
-
-docker compose up -d --build
-
-
-Log:
-
-docker compose logs -f
-
-
-Log từng service
-
-docker compose logs -f kafka
-docker compose logs -f producer
-docker compose logs -f spark
+Sau mỗi lần update code, chạy restart_container.cmd để cập nhật code, tránh cài lại.
