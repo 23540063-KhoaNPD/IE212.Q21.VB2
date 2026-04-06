@@ -1,37 +1,48 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col
+from pyspark.sql.functions import from_json, col, schema_of_json
+from kafka import KafkaAdminClient
 import socket
 import time
+from pyspark.sql.functions import trim, lower
 
 # --- Cấu hình ---
 TOPIC_NAME = "my_dataset_topic"
 BOOTSTRAP_SERVERS = "kafka:9092"
-
-# Danh sách các cột tiêu biểu muốn giữ lại để quan sát
 SELECTED_COLUMNS = [
-    "Timestamp",
-    "Src IP", 
-    "Src Port", 
-    "Dst IP", 
-    "Dst Port", 
-    "Protocol", 
-    "Flow Duration",
-    "Tot Fwd Pkts",
-    "Tot Bwd Pkts",
-    "Label"  # Cột quan trọng nhất để xem kết quả (ddos, normal, etc.)
+    "Timestamp", "Src IP", "Src Port", "Dst IP", "Dst Port", 
+    "Protocol", "Flow Duration", "Tot Fwd Pkts", "Tot Bwd Pkts", "Label"
 ]
 
 def wait_for_kafka(host, port):
-    print("⏳ Đang kiểm tra kết nối Kafka...")
+    print(f"⏳ 1. Kiểm tra kết nối TCP tới {host}:{port}...")
     while True:
         try:
             s = socket.create_connection((host, port), timeout=2)
             s.close()
+            print("✅ Kafka Broker đã mở cổng kết nối.")
             break
         except:
             time.sleep(2)
 
+def wait_for_topic(topic_name, servers):
+    print(f"⏳ 2. Kiểm tra sự tồn tại của topic '{topic_name}'...")
+    while True:
+        try:
+            admin_client = KafkaAdminClient(bootstrap_servers=servers)
+            topics = admin_client.list_topics()
+            admin_client.close()
+            if topic_name in topics:
+                print(f"✅ Topic '{topic_name}' đã sẵn sàng!")
+                break
+            else:
+                print(f"⚠️ Topic '{topic_name}' chưa được tạo. Đang đợi Producer...")
+        except Exception as e:
+            print(f"❌ Lỗi khi kết nối AdminClient: {e}")
+        time.sleep(3)
+
+# --- KHỞI CHẠY ---
 wait_for_kafka("kafka", 9092)
+wait_for_topic(TOPIC_NAME, BOOTSTRAP_SERVERS)
 
 spark = SparkSession.builder \
     .appName("FilteredConsumer") \
@@ -39,53 +50,79 @@ spark = SparkSession.builder \
 
 spark.sparkContext.setLogLevel("ERROR")
 
-# 1. Đọc stream từ Kafka
+# 3. Vòng lặp đợi dữ liệu mẫu để suy luận Schema
+dynamic_schema = None
+print("⏳ 3. Đợi dữ liệu mẫu đầu tiên từ Kafka để học Schema...")
+
+while dynamic_schema is None:
+    try:
+        sample_data = spark.read.format("kafka") \
+            .option("kafka.bootstrap.servers", BOOTSTRAP_SERVERS) \
+            .option("subscribe", TOPIC_NAME) \
+            .load() \
+            .selectExpr("CAST(value AS STRING)") \
+            .limit(1) \
+            .collect()
+
+        if len(sample_data) > 0:
+            json_str = sample_data[0][0]
+            dynamic_schema = schema_of_json(json_str)
+            print("✅ Đã học được Schema từ dữ liệu thực tế.")
+        else:
+            print("ℹ️ Topic trống. Đang đợi Producer gửi tin nhắn đầu tiên...")
+            time.sleep(5)
+    except Exception as e:
+        print(f"🔄 Đang khởi tạo lại bộ đọc mẫu: {e}")
+        time.sleep(5)
+
+# ... (Các phần import và wait_for giữ nguyên) ...
+
+# 4. Bắt đầu Stream thực tế
+print("🚀 4. Bắt đầu xử lý luồng dữ liệu...")
 raw_df = spark.readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", BOOTSTRAP_SERVERS) \
     .option("subscribe", TOPIC_NAME) \
+    .option("startingOffsets", "earliest") \
     .load()
 
-# 2. Lấy Schema động từ tin nhắn đầu tiên (như đã làm ở bước trước)
-# Ở đây tôi giả định bạn dùng schema_of_json hoặc đã có schema
-# Để đơn giản và chính xác, ta sẽ parse toàn bộ rồi select sau
-from pyspark.sql.functions import schema_of_json
+# BƯỚC A: Parse JSON
+parsed_df = raw_df.selectExpr("CAST(value AS STRING) as json_data") \
+    .select(from_json(col("json_data"), dynamic_schema).alias("data")) \
+    .select("data.*")
 
-# Lấy sample để tạo schema
-sample_data = spark.read.format("kafka") \
-    .option("kafka.bootstrap.servers", BOOTSTRAP_SERVERS) \
-    .option("subscribe", TOPIC_NAME).load() \
-    .selectExpr("CAST(value AS STRING)").limit(1).collect()
+# BƯỚC B: Làm sạch tên cột (loại bỏ khoảng trắng trong tên cột 85 cột)
+# Ví dụ: " Label" -> "Label"
+cleaned_df = parsed_df.select([col(f"`{c}`").alias(c.strip()) for c in parsed_df.columns])
 
-if sample_data:
-    dynamic_schema = schema_of_json(sample_data[0][0])
-    
-    # 3. Parse và Lọc cột
-    parsed_df = raw_df.selectExpr("CAST(value AS STRING) as json_data") \
-        .select(from_json(col("json_data"), dynamic_schema).alias("data")) \
-        .select("data.*")
+# BƯỚC C: Lọc dữ liệu (Sử dụng cleaned_df đã chuẩn hóa tên cột)
+# Dùng trim và lower để loại bỏ mọi biến thể của " ddos ", "DDOS"
+filtered_df = cleaned_df.filter(
+    (trim(lower(col("Label"))) == "ddos")
+)
 
-    # Xử lý khoảng trắng thừa trong tên cột (nếu có) và lọc
-    # Cách này giúp tránh lỗi nếu tên cột trong CSV là " Label" thay vì "Label"
-    available_cols = parsed_df.columns
-    final_selection = []
-    for c in SELECTED_COLUMNS:
-        # Tìm cột khớp (không phân biệt khoảng trắng đầu cuối)
-        matched = [real_col for real_col in available_cols if real_col.strip() == c]
-        if matched:
-            final_selection.append(col(f"`{matched[0]}`").alias(c))
+# BƯỚC D: Chọn các cột tiêu biểu từ dữ liệu ĐÃ LỌC (filtered_df)
+final_selection = []
+available_cols = filtered_df.columns
 
-    display_df = parsed_df.select(*final_selection)
+for c in SELECTED_COLUMNS:
+    # Vì đã strip() ở Bước B, ta so sánh trực tiếp
+    if c in available_cols:
+        final_selection.append(col(f"`{c}`"))
 
-    # 4. Xuất ra Console
-    query = display_df.writeStream \
-        .outputMode("append") \
-        .format("console") \
-        .option("truncate", "false") \
-        .option("numRows", 20) \
-        .start()
-
-    print("🚀 Đang hiển thị các cột tiêu biểu...")
-    query.awaitTermination()
+if not final_selection:
+    print("❌ Không tìm thấy cột nào trong danh sách SELECTED_COLUMNS!")
+    display_df = filtered_df 
 else:
-    print("❌ Chưa có dữ liệu trong Kafka để phân tích Schema.")
+    display_df = filtered_df.select(*final_selection)
+
+# 5. Xuất ra Console
+# Dùng vertical=True nếu bạn vẫn thấy bảng bị vỡ do nhiều cột
+query = display_df.writeStream \
+    .outputMode("append") \
+    .format("console") \
+    .option("truncate", "false") \
+    .option("numRows", 20) \
+    .start()
+
+query.awaitTermination()
