@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Stream Test - Python WebSocket</title>
+    <style>
+        body { font-family: sans-serif; background: #1a1a1a; color: #caccca; padding: 20px; }
+        #log { 
+            height: 400px; overflow-y: scroll; border: 1px solid #333; 
+            padding: 10px; background: #000; font-family: monospace;
+        }
+        .record { margin-bottom: 5px; border-bottom: 1px solid #222; padding-bottom: 2px; }
+        .fraud { color: #ff4444; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h2>Dữ liệu Real-time từ Python Server</h2>
+    <div id="status">Đang kết nối...</div>
+    <hr>
+    <div id="log"></div>
+
+    <script>
+        // Địa chỉ server của bạn (khớp với port 9999 trong code Python)
+        const socket = new WebSocket('ws://localhost:9999');
+        const logDiv = document.getElementById('log');
+        const statusDiv = document.getElementById('status');
+
+        socket.onopen = () => {
+            statusDiv.innerText = "Trạng thái: Đã kết nối";
+            statusDiv.style.color = "#00ff00";
+        };
+
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            
+            // Tạo phần tử hiển thị mới
+            const item = document.createElement('div');
+            item.className = 'record';
+            
+            // Nếu là gian lận thì highlight đỏ
+            if (data.isFraud === 1) {
+                item.classList.add('fraud');
+                item.innerText = `CẢNH BÁO: ${event.data}`;
+            } else {
+                item.innerText = `🔹 Nhận: ${event.data}`;
+            }
+
+            // Thêm vào đầu danh sách (để thấy dữ liệu mới nhất trước)
+            logDiv.prepend(item);
+        };
+
+        socket.onclose = () => {
+            statusDiv.innerText = "Trạng thái: Mất kết nối";
+            statusDiv.style.color = "#ff4444";
+        };
+
+        socket.onerror = (error) => {
+            console.error("Lỗi:", error);
+        };
+    </script>
+</body>
+</html>
