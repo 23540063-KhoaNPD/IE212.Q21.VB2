@@ -8,9 +8,14 @@ from pyspark.sql.functions import trim, lower
 # --- Cấu hình ---
 TOPIC_NAME = "my_dataset_topic"
 BOOTSTRAP_SERVERS = "kafka:9092"
+# SELECTED_COLUMNS = [
+#     "Timestamp", "Src IP", "Src Port", "Dst IP", "Dst Port", 
+#     "Protocol", "Flow Duration", "Tot Fwd Pkts", "Tot Bwd Pkts", "Label"
+# ]
+
 SELECTED_COLUMNS = [
-    "Timestamp", "Src IP", "Src Port", "Dst IP", "Dst Port", 
-    "Protocol", "Flow Duration", "Tot Fwd Pkts", "Tot Bwd Pkts", "Label"
+    "session_id", "network_packet_size", "protocol_type", "session_duration", "encryption_used", 
+    "ip_reputation_score", "failed_logins", "attack_detected"
 ]
 
 def wait_for_kafka(host, port):
@@ -97,9 +102,11 @@ cleaned_df = parsed_df.select([col(f"`{c}`").alias(c.strip()) for c in parsed_df
 
 # BƯỚC C: Lọc dữ liệu (Sử dụng cleaned_df đã chuẩn hóa tên cột)
 # Dùng trim và lower để loại bỏ mọi biến thể của " ddos ", "DDOS"
-filtered_df = cleaned_df.filter(
-    (trim(lower(col("Label"))) == "ddos")
-)
+# filtered_df = cleaned_df.filter(
+#     (trim(lower(col("Label"))) == "ddos")
+# )
+
+filtered_df = cleaned_df
 
 # BƯỚC D: Chọn các cột tiêu biểu từ dữ liệu ĐÃ LỌC (filtered_df)
 final_selection = []

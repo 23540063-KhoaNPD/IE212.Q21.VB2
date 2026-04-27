@@ -10,7 +10,7 @@ from kafka.errors import TopicAlreadyExistsError, NoBrokersAvailable
 
 # Cấu hình đường dẫn
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-file_path = os.path.join(BASE_DIR, 'data', 'final_dataset.csv')
+file_path = os.path.join(BASE_DIR, 'data', 'cybersecurity_intrusion_data.csv')
 
 BOOTSTRAP_SERVERS = "kafka:9092"
 TOPIC_NAME = "my_dataset_topic"
