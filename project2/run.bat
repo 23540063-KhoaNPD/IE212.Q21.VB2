@@ -11,7 +11,7 @@ timeout /t 10
 
 echo.
 echo [2] Create Kafka topic...
-docker exec -it project2-kafka-1 kafka-topics.sh --create --topic logs --bootstrap-server localhost:9092
+docker exec -it project2-kafka-1 kafka-topics.sh --create --if-not-exists --topic logs --bootstrap-server localhost:9092
 
 echo.
 echo [3] Install Python Kafka lib...
