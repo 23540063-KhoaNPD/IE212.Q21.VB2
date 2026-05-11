@@ -22,9 +22,9 @@ services:
       retries: 12
 
   producer:
-      image: apache/spark:3.5.0  # Đổi từ python:3.10 sang spark
+      image: apache/spark:3.5.0  
       container_name: kafka_producer
-      user: root # Cần quyền root để cài pip requirements
+      user: root 
       depends_on:
         kafka:
           condition: service_healthy
