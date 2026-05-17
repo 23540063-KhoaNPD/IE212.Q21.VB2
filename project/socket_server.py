@@ -9,29 +9,30 @@ async def handler(websocket):
 
     try:
         async for message in websocket:
-            print("Received:", message)
-
-            # broadcast cho tất cả client
+            print("Received message:", message)
             disconnected = set()
 
             for client in clients:
                 try:
                     await client.send(message)
-                except:
+                except Exception:
                     disconnected.add(client)
 
-            # cleanup client lỗi
-            for d in disconnected:
-                clients.remove(d)
+            for client in disconnected:
+                clients.discard(client)
 
-    except:
-        print("Client disconnected")
+    except websockets.exceptions.ConnectionClosedOK:
+        pass
+    except Exception as e:
+        print("WebSocket handler error:", e)
     finally:
-        clients.remove(websocket)
+        clients.discard(websocket)
+        print("Client disconnected")
 
 async def main():
     async with websockets.serve(handler, "0.0.0.0", 9999):
-        print("WebSocket running at ws://localhost:9999")
+        print("WebSocket server running on ws://0.0.0.0:9999")
         await asyncio.Future()
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

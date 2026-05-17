@@ -22,24 +22,42 @@ services:
       retries: 12
 
   producer:
-      image: apache/spark:3.5.0  
-      container_name: kafka_producer
-      user: root 
-      depends_on:
-        kafka:
-          condition: service_healthy
-      volumes:
-        - ./producer.py:/app/producer.py
-        - ./data:/app/data
-        - ./requirements.txt:/app/requirements.txt
-      working_dir: /app
-      command: >
-        sh -c "
-        pip install -r requirements.txt &&
-        /opt/spark/bin/spark-submit 
-        --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 
-        /app/producer.py
-        "
+    image: apache/spark:3.5.0  
+    container_name: kafka_producer
+    user: root 
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./producer.py:/app/producer.py
+      - ./data:/app/data
+      - ./requirements.txt:/app/requirements.txt
+    working_dir: /app
+    command: >
+      sh -c "
+      pip install -r requirements.txt &&
+      /opt/spark/bin/spark-submit 
+      --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 
+      /app/producer.py
+      "
+
+  socket-server:
+    image: python:3.12-slim
+    container_name: socket_server
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./socket_server.py:/app/socket_server.py
+      - ./requirements.txt:/app/requirements.txt
+    working_dir: /app
+    command: >
+      sh -c "
+      pip install -r requirements.txt &&
+      python socket_server.py
+      "
+    ports:
+      - "9999:9999"
 
   spark:
     image: apache/spark:3.5.0
@@ -48,6 +66,10 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+      socket-server:
+        condition: service_started
+    environment:
+      - SOCKET_URI=ws://socket-server:9999
     volumes:
       - ./consumer.py:/app/consumer.py
       - ./requirements.txt:/app/requirements.txt

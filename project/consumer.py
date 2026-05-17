@@ -1,6 +1,7 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col, schema_of_json
 from kafka import KafkaAdminClient
+import os
 import socket
 import time
 import asyncio
@@ -10,7 +11,7 @@ import json
 # --- Cấu hình ---
 TOPIC_NAME = "my_dataset_topic"
 BOOTSTRAP_SERVERS = "kafka:9092"
-SOCKET_URI = "ws://192.168.100.246:9999"
+SOCKET_URI = os.getenv("SOCKET_URI", "ws://socket-server:9999")
 
 SELECTED_COLUMNS = [
     "step",
@@ -29,6 +30,7 @@ SELECTED_COLUMNS = [
 
 async def send_batch_async(rows):
     try:
+        print(f"[SOCKET] Connecting to {SOCKET_URI}...")
         async with websockets.connect(SOCKET_URI) as ws:
             print(f"📡 Sending {len(rows)} records to socket...")
 
